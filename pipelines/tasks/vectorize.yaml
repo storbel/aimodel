@@ -1,0 +1,123 @@
+# pipelines/tasks/git-clone.yaml
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: git-clone
+spec:
+  workspaces:
+    - name: output
+      description: The git repo will be cloned into this workspace
+  params:
+    - name: url
+      description: git url to clone
+      type: string
+    - name: revision
+      description: git revision to checkout
+      type: string
+      default: main
+  steps:
+    - name: clone
+      image: alpine/git:v2.26.2
+      script: |
+        git clone $(params.url) $(workspaces.output.path)/source
+        cd $(workspaces.output.path)/source
+        git checkout $(params.revision)
+
+---
+# pipelines/tasks/extract-content.yaml
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: extract-content
+spec:
+  workspaces:
+    - name: source
+      description: Workspace containing the source code
+    - name: documents
+      description: Workspace containing raw documents
+  steps:
+    - name: install-deps
+      image: python:3.9-slim
+      script: |
+        apt-get update && apt-get install -y tesseract-ocr
+        pip install docling pytesseract pillow
+        
+    - name: extract
+      image: python:3.9-slim
+      script: |
+        cd $(workspaces.source.path)/source
+        python -m src.docprocessing.extractor \
+          --config config/settings.yaml \
+          --input $(workspaces.documents.path) \
+          --output data/extracted
+      volumeMounts:
+        - name: documents
+          mountPath: /documents
+
+---
+# pipelines/tasks/preprocess.yaml
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: preprocess
+spec:
+  workspaces:
+    - name: source
+      description: Workspace containing the source code and extracted data
+  steps:
+    - name: install-deps
+      image: python:3.9-slim
+      script: |
+        pip install pandas scikit-learn nltk
+        python -c "import nltk; nltk.download('punkt')"
+        
+    - name: preprocess
+      image: python:3.9-slim
+      script: |
+        cd $(workspaces.source.path)/source
+        python -m src.docprocessing.preprocessor \
+          --config config/settings.yaml \
+          --input data/extracted \
+          --output data/preprocessed
+
+---
+# pipelines/tasks/vectorize.yaml
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: vectorize
+spec:
+  workspaces:
+    - name: source
+      description: Workspace containing preprocessed data
+  steps:
+    - name: install-deps
+      image: python:3.9-slim
+      script: |
+        pip install torch transformers sentence-transformers faiss-cpu
+        
+    - name: generate-vectors
+      image: python:3.9-slim
+      resources:
+        requests:
+          memory: "4Gi"
+          cpu: "2"
+        limits:
+          memory: "8Gi"
+          cpu: "4"
+      script: |
+        cd $(workspaces.source.path)/source
+        python -m src.docprocessing.vectorizer \
+          --config config/settings.yaml \
+          --input data/preprocessed \
+          --output data/vectors
+        
+    - name: build-index
+      image: python:3.9-slim
+      script: |
+        cd $(workspaces.source.path)/source
+        python -m src.docprocessing.indexer \
+          --vectors data/vectors \
+          --output data/faiss_index
+
+

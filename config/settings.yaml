@@ -1,0 +1,36 @@
+# config/settings.yaml
+document_sources:
+  - path: "/data/documents"
+    types: ["pdf", "xlsx", "png", "jpg"]
+    watch: true
+    
+extraction:
+  docling:
+    enable_ocr: true
+    extract_tables: true
+    extract_diagrams: true
+    languages: ["fr", "en"]
+  
+preprocessing:
+  clean:
+    remove_duplicates: true
+    fix_encoding: true
+    normalize_text: true
+  enrich:
+    add_metadata: true
+    generate_tags: true
+    
+vectorization:
+  model: "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+  batch_size: 32
+  dimension: 384
+  
+faiss:
+  index_type: "IVFFlat"
+  nlist: 100
+  
+chatbot:
+  model: "distilbert-base-multilingual-cased"
+  max_length: 512
+  temperature: 0.7
+  top_k: 5

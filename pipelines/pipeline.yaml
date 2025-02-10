@@ -1,0 +1,56 @@
+# pipelines/pipeline.yaml
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: doc-processing-pipeline
+spec:
+  workspaces:
+    - name: shared-workspace
+    - name: document-storage
+  tasks:
+    - name: fetch-repository
+      taskRef:
+        name: git-clone
+      workspaces:
+        - name: output
+          workspace: shared-workspace
+      params:
+        - name: url
+          value: $(params.git-url)
+        - name: revision
+          value: main
+
+    - name: extract-content
+      taskRef:
+        name: extract-content
+      runAfter: ["fetch-repository"]
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+        - name: documents
+          workspace: document-storage
+          
+    - name: preprocess-data
+      taskRef:
+        name: preprocess
+      runAfter: ["extract-content"]
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+          
+    - name: generate-vectors
+      taskRef:
+        name: vectorize
+      runAfter: ["preprocess-data"]
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+          
+    - name: deploy-services
+      taskRef:
+        name: deploy
+      runAfter: ["generate-vectors"]
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+

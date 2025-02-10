@@ -1,0 +1,30 @@
+---
+# pipelines/tasks/deploy.yaml
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: deploy
+spec:
+  workspaces:
+    - name: source
+      description: Workspace containing the application code
+  steps:
+    - name: apply-k8s
+      image: bitnami/kubectl
+      script: |
+        cd $(workspaces.source.path)/source
+        # Deploy backend API
+        kubectl apply -f k8s/deployments/backend.yaml
+        # Deploy vector store
+        kubectl apply -f k8s/deployments/faiss.yaml
+        # Deploy chatbot frontend
+        kubectl apply -f k8s/deployments/chatbot.yaml
+        
+    - name: verify-deployment
+      image: bitnami/kubectl
+      script: |
+        kubectl wait --for=condition=available \
+          deployment/backend \
+          deployment/faiss \
+          deployment/chatbot \
+          --timeout=300s

@@ -1,0 +1,9 @@
+# src/chatbot/requirements.txt
+torch==1.10.0
+transformers==4.12.5
+sentence-transformers==2.1.0
+faiss-cpu==1.7.2
+streamlit==1.2.0
+redis==4.0.2
+aiohttp==3.8.1
+uvicorn==0.15.0

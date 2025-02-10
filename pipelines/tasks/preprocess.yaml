@@ -1,0 +1,25 @@
+---
+# pipelines/tasks/preprocess.yaml
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: preprocess
+spec:
+  workspaces:
+    - name: source
+      description: Workspace containing the source code and extracted data
+  steps:
+    - name: install-deps
+      image: python:3.9-slim
+      script: |
+        pip install pandas scikit-learn nltk
+        python -c "import nltk; nltk.download('punkt')"
+        
+    - name: preprocess
+      image: python:3.9-slim
+      script: |
+        cd $(workspaces.source.path)/source
+        python -m src.docprocessing.preprocessor \
+          --config config/settings.yaml \
+          --input data/extracted \
+          --output data/preprocessed

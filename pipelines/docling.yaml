@@ -1,0 +1,91 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: docling-data-transformation-pipeline
+spec:
+  params:
+    - name: repo-url
+      type: string
+      description: The URL of the Git repository to clone
+  tasks:
+    - name: clone-repository
+      taskRef:
+        name: git-clone
+      params:
+        - name: url
+          value: "$(params.repo-url)"
+        - name: revision
+          value: "main"
+      workspaces:
+        - name: output
+          workspace: shared-workspace
+          subPath: repo
+
+    - name: transform-data
+      runAfter:
+        - clone-repository
+      taskSpec:
+        params:
+          - name: data-path
+            type: string
+            default: "data/documents"
+        steps:
+          - name: install-dependencies
+            image: python:3.9-slim
+            script: pip install docling faiss-cpu
+            workingDir: "$(workspaces.source.path)/repo"
+          - name: transform-documents
+            image: python:3.9-slim
+            script: python -m docling transform $(params.data-path) --output transformed-data
+            workingDir: "$(workspaces.source.path)/repo"
+        workspaces:
+          - name: source
+            mountPath: /workspace
+            description: The workspace where the repository is cloned
+      params:
+        - name: data-path
+          value: "data/documents"
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+          subPath: repo
+
+    - name: index-data
+      runAfter:
+        - transform-data
+      taskSpec:
+        steps:
+          - name: index-documents
+            image: python:3.9-slim
+            script: python -m faiss.index transformed-data --output indexed-data
+            workingDir: "$(workspaces.source.path)/repo"
+        workspaces:
+          - name: source
+            mountPath: /workspace
+            description: The workspace where the repository is cloned
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+          subPath: repo
+
+    - name: rag-query
+      runAfter:
+        - index-data
+      taskSpec:
+        steps:
+          - name: query-data
+            image: python:3.9-slim
+            script: python -m rag.query indexed-data --question 'Your question here'
+            workingDir: "$(workspaces.source.path)/repo"
+        workspaces:
+          - name: source
+            mountPath: /workspace
+            description: The workspace where the repository is cloned
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+          subPath: repo
+
+  workspaces:
+    - name: shared-workspace
+      description: Workspace shared between tasks
