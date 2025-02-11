@@ -1,0 +1,32 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: docling-extractor
+spec:
+  params:
+    - name: options
+      type: string
+      description: Options for the docling command
+      default: "--no-ocr --from pdf"
+    - name: input
+      type: string
+      description: The path of the input files
+    - name: output
+      type: string
+      description: The path for the output files
+  steps:
+    - name: install-dependencies
+      image: python:3.9-slim
+      script: |
+        pip install docling faiss-cpu
+      workingDir: "$(workspaces.source.path)/repo"
+
+    - name: transform-documents
+      image: python:3.9-slim
+      script: |
+        docling $(params.input) --output $(params.output) $(params.options) --abort-on-error
+      workingDir: "$(workspaces.source.path)/repo"
+
+  workspaces:
+    - name: source
+      description: The workspace where the repository is cloned
